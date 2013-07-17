@@ -63,6 +63,9 @@ Author Erik Hemberg
 
 """
 
+
+### Below are class definitions for the core objects used in ponyGP
+
 class Tree(object):
     """A Tree has a root which is an object of class TreeNode"""
 
@@ -114,7 +117,7 @@ class Tree(object):
 
     def __str__(self):
         s = 'node_cnt:%d depth:%d root:%s' % \
-            (self.node_cnt, self.depth, self.root.str_as_tree())
+            (self.node_cnt, self.depth, str(self.root))
         return s
 
     
@@ -126,34 +129,22 @@ class TreeNode(object):
         self.symbol = symbol
         self.children = []
 
-    def str_as_tree(self):
+    def __str__(self):
         """Return an s-expression for the node and its descendents."""
 
         if len(self.children):
             retval = "(" + self.symbol[:]
             for child in self.children:
-                retval += " " + child.str_as_tree()
+                retval += " " + str(child)
             retval += ")"
             return retval
         else:
             return self.symbol
 
-
-# Same as str_as_tree but only parent and self.symbol given 
-##    def __repr__(self):
-##        """Return a detailed string representation of the node
-##        itself."""
-##
-##        if self.parent is None:
-##            parent = "None"
-##        else:
-##            parent = self.parent.symbol
-##        return "p:%s symbol:%s" % (parent, self.symbol)
-                
-
 class Symbols(object):
     """Symbols are functions (internal nodes) or terminals (leaves)"""
-    
+
+    ## arities: a dictionary mapping symbol name to arity (integer >= 0)
     def __init__(self, arities, variable_prefix):
         self.arities = arities
         self.terminals = []
@@ -204,7 +195,7 @@ class Individual(object):
 
     def __str__(self):
         s = 'Individual: %f %s' % \
-            (float(self.fitness), self.genome.root.str_as_tree())
+            (float(self.fitness), str(self.genome.root))
         return s
 
 
@@ -216,31 +207,36 @@ class Symbolic_Regression(object):
         self.fitness_cases = fitness_cases
         #Each row is the response to the corresponding fitness cases
         self.targets = targets
+        ## TODO description
+        self.variables = None
+        ## TODO description
         self.variable_map = variable_map
         assert len(self.fitness_cases) == len(self.targets)
-    # changed from __call__ to fitns_eval
-    def fitns_eval(self, individual):
+    
+    def __call__(self, individual):
         """Evaluates and sets the fitness in an individual. Fitness is
         mean square error(MSE)."""
         
         fitness = 0.0
         for case, target in zip(self.fitness_cases, self.targets):
-            self.variables = case
-            error = self.evaluate(individual.genome.root)
-            fitness += math.sqrt(abs(error - target))
+            predicted = self.evaluate(individual.genome.root, case)
+            ## FIXME: don't you mean to square here instead of sqrt?
+            fitness += math.sqrt(abs(predicted - target))
 
         individual.fitness = fitness/float(len(self.targets))
 
-    def evaluate(self, node):        
+    ## case: the explanatory variables for one data point
+    def evaluate(self, node, case):        
         """Evaluate a node recursively"""
         
         #Identify the node symbol
+        ## handle basic mathematical functions
         if node.symbol == "+":
-            return self.evaluate(node.children[0]) + self.evaluate(node.children[1])
+            return self.evaluate(node.children[0], case) + self.evaluate(node.children[1],case)
         elif node.symbol == "-":
-            return self.evaluate(node.children[0]) - self.evaluate(node.children[1])
+            return self.evaluate(node.children[0], case) - self.evaluate(node.children[1], case)
         elif node.symbol == "*":
-            return self.evaluate(node.children[0]) * self.evaluate(node.children[1])
+            return self.evaluate(node.children[0], case) * self.evaluate(node.children[1], case)
         elif node.symbol == "/":
             numerator = self.evaluate(node.children[0])
             denominator = self.evaluate(node.children[1])
@@ -248,11 +244,16 @@ class Symbolic_Regression(object):
                 return numerator
             else:
                 return numerator / denominator
+        ## handle the terminals
         elif node.symbol.startswith(symbols.variable_prefix):
-            return self.variables[self.variable_map[node.symbol]]
+            return case[self.variable_map[node.symbol]]
+        # the symbol is a constant
         else:
-            #The symbol is a terminal
             return float(node.symbol)
+
+
+### Below are functions which are used for evolution
+
 def get_random_boolean():
     return bool(random.getrandbits(1))
 
@@ -275,36 +276,27 @@ def initialize_population():
         if tree.depth < max_depth and symbol in symbols.functions:
             tree.grow(tree.root, 1, max_depth, full)
         individuals.append(Individual(tree))
-        print('Initial tree %d: %s' %(i, tree.root.str_as_tree()))
+        print('Initial tree %d: %s' %(i, str(tree.root)))
 
     return individuals
 
-def search_loop(new_individuals):
+def search_loop():
     """The evolutionary search loop."""
 
-    #Initalise first generation
-    individuals = []
-    best_ever = None
+    #Create an initial population
+    population = initialize_population()
+    #Evaluate fitness of initial population
+    evaluate_fitness(population, fitness_function)
+    population.sort()
+    best_ever = population[0]
     #Generation loop
     generation = 0
     #TODO break out when best fitness equals max fitness
     while generation < GENERATIONS:
-        #Evaluate fitness
-        evaluate_fitness(new_individuals, fitness_function)
-        #Find best solution
-        new_individuals.sort()
-        best_ever = new_individuals[0]
-        #Replace population
-        individuals = generational_replacement(new_individuals,
-                                               individuals)
-        #Stats when the population has been replaced
-        print_stats(generation, individuals)
-        #Increase the generation counter
-        generation += 1        
-        #Selection
-        parents = tournament_selection(individuals)
-        #Create new population
+        #1) Create new population
         new_individuals = []
+        #Select parents for creating children
+        parents = tournament_selection(population)
         while len(new_individuals) < POPULATION_SIZE:
             #Crossover
             new_individuals.extend(
@@ -314,9 +306,25 @@ def search_loop(new_individuals):
         #Mutation
         new_individuals = list(map(subtree_mutation, new_individuals))
 
+        #2) Evaluate fitness
+        evaluate_fitness(new_individuals, fitness_function)
+
+        #3) Select best individuals to keep in population
+        population = generational_replacement(new_individuals, population)
+
+        #4) Find best solution
+        population.sort()
+        best_ever = population[0]
+
+        #Stats when the population has been replaced
+        print_stats(generation, population)
+
+        #Finally, increase the generation counter
+        generation += 1        
+
     return best_ever
 
-def print_stats(generation, individuals):
+def print_stats(generation, population):
     """Print the statistics for the generation and individuals"""
     #len(values) == 0 possible?
     def ave(values):
@@ -331,10 +339,10 @@ def print_stats(generation, individuals):
         _std = std(values, _ave)
         return _ave, _std
             
-    individuals.sort()
-    fitness_vals = [i.fitness for i in individuals]
-    size_vals = [i.genome.node_cnt for i in individuals]
-    depth_vals = [i.genome.calculate_depth() for i in individuals]
+    population.sort()
+    fitness_vals = [i.fitness for i in population]
+    size_vals = [i.genome.node_cnt for i in population]
+    depth_vals = [i.genome.calculate_depth() for i in population]
     ave_fit, std_fit = get_ave_and_std(fitness_vals)
     ave_size, std_size = get_ave_and_std(size_vals)
     ave_depth, std_depth = get_ave_and_std(depth_vals)
@@ -343,7 +351,7 @@ def print_stats(generation, individuals):
            ave_fit, std_fit,
            ave_size, std_size,
            ave_depth, std_depth,
-           individuals[0]))
+           population[0]))
 
 def tournament_selection(population, tournament_size=2):
     """Given a population, draw <tournament_size> competitors
@@ -357,21 +365,18 @@ def tournament_selection(population, tournament_size=2):
         
     return winners
 
-def generational_replacement(new_pop, individuals):
+def generational_replacement(new_pop, population):
     """Return new a population. The ELITE_SIZE best individuals are
     appended to the new population if they are better than the worst
     individuals in new population"""
 
-    individuals.sort()
-    for ind in individuals[:ELITE_SIZE]:
-        new_pop.append(copy.deepcopy(ind))
+    new_pop += copy.deepcopy(population)
     new_pop.sort()
-
     return new_pop[:POPULATION_SIZE]
 
-def evaluate_fitness(individuals, fitness_function):
+def evaluate_fitness(population, fitness_function):
     """Perform the mapping for each individual """
-    for ind in individuals:
+    for ind in population:
         fitness_function(ind)
 
 def subtree_mutation(individual):
@@ -427,10 +432,8 @@ def subtree_crossover(parent1, parent2):
 def main():
     """Create population. Search. Evaluate best solution on out-of-sample data"""
     
-    #Create population
-    individuals = initialize_population()
     #Evolutionary search
-    best_ever = search_loop(individuals)
+    best_ever = search_loop()
     print("Best train:" + str(best_ever))
     #Test on out-of-sample data
     out_of_sample_test(best_ever)
@@ -443,7 +446,7 @@ def out_of_sample_test(individual):
         [1, 1]
         ]
     targets = [1, 1]
-    fitness_function = Symbolic_Regression.fitness_eval(fitness_cases, targets, symbols.variable_map)
+    fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
     fitness_function(individual)
     print("Best test:" + str(individual))
 
@@ -458,18 +461,16 @@ if __name__ == '__main__':
     GENERATIONS = 10
     ELITE_SIZE = 1
     #WARNING SEED is hardcoded. Change the SEED for different search
-    SEED = 4
+    ##Won't default SEED = None work?
+    SEED = None
     CROSSOVER_PROBABILITY = 0.9
     MUTATION_PROBABILITY = 0.5
-    #TODO command line arguments
-    
     random.seed(SEED)
     
+    #TODO command line arguments
     #TODO function showing how to compile the code and then run
     #instead of interpreter
-    
     #TODO have a function generating the fitness cases
-    
     #TODO currently this function has very few fitness cases and
     #serves most for illustrative purposes
     symbols = Symbols(ARITIES, VARIABLE_PREFIX)
@@ -478,7 +479,5 @@ if __name__ == '__main__':
         [1, 0]
         ]
     targets = [0, 2]
-    fitness_function = Symbolic_Regression(fitness_cases,
-                                           targets,
-                                           symbols.variable_map)
+    fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
     main()
