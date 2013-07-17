@@ -76,6 +76,7 @@ class Tree(object):
     def grow(self, node, depth, max_depth, full=False):        
         """Recursively grow a node to max depth"""
         
+        # Symbols are mathematical operators
         for _ in range(symbols.arities[node.symbol]):
             symbol = symbols.get_rnd_symbol(depth, max_depth, full)
             self.node_cnt += 1
@@ -85,9 +86,10 @@ class Tree(object):
         
     def calculate_depth(self):
         """Calculate the maximum depth of the tree."""
-        
+        node_depths = []
         all_nodes = self.depth_first(self.root)
-        node_depths = [self.get_depth(node) for node in all_nodes]
+        for node in all_nodes:
+            node_depths.append(self.get_depth(node))
         self.depth = max(node_depths)
         return self.depth
 
@@ -136,15 +138,17 @@ class TreeNode(object):
         else:
             return self.symbol
 
-    def __repr__(self):
-        """Return a detailed string representation of the node
-        itself."""
 
-        if self.parent is None:
-            parent = "None"
-        else:
-            parent = self.parent.symbol
-        return "p:%s symbol:%s" % (parent, self.symbol)
+# Same as str_as_tree but only parent and self.symbol given 
+##    def __repr__(self):
+##        """Return a detailed string representation of the node
+##        itself."""
+##
+##        if self.parent is None:
+##            parent = "None"
+##        else:
+##            parent = self.parent.symbol
+##        return "p:%s symbol:%s" % (parent, self.symbol)
                 
 
 class Symbols(object):
@@ -179,7 +183,8 @@ class Symbols(object):
         if depth >= max_depth:
             symbol = random.choice(self.terminals)
         else:
-            if not full and bool(random.getrandbits(1)):
+            if not full and get_random_boolean():
+                # Faster to index and use random.random
                 symbol = random.choice(self.terminals)
             else:
                 symbol = random.choice(self.functions)
@@ -213,8 +218,8 @@ class Symbolic_Regression(object):
         self.targets = targets
         self.variable_map = variable_map
         assert len(self.fitness_cases) == len(self.targets)
-
-    def __call__(self, individual):
+    # changed from __call__ to fitns_eval
+    def fitns_eval(self, individual):
         """Evaluates and sets the fitness in an individual. Fitness is
         mean square error(MSE)."""
         
@@ -248,7 +253,8 @@ class Symbolic_Regression(object):
         else:
             #The symbol is a terminal
             return float(node.symbol)
-
+def get_random_boolean():
+    return bool(random.getrandbits(1))
 
 def initialize_population():
     """Ramped half-half initialization. The individuals in the
@@ -258,7 +264,7 @@ def initialize_population():
     individuals = []
     for i in range(POPULATION_SIZE):
         #Pick full or grow method
-        full = bool(random.getrandbits(1))
+        full = get_random_boolean()
         #Ramp the depth
         max_depth = (i % MAX_DEPTH) + 1
         #Create root node
@@ -312,7 +318,7 @@ def search_loop(new_individuals):
 
 def print_stats(generation, individuals):
     """Print the statistics for the generation and individuals"""
-    
+    #len(values) == 0 possible?
     def ave(values):
         """Return the average of the values """
         return float(sum(values))/len(values)
@@ -437,7 +443,7 @@ def out_of_sample_test(individual):
         [1, 1]
         ]
     targets = [1, 1]
-    fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
+    fitness_function = Symbolic_Regression.fitness_eval(fitness_cases, targets, symbols.variable_map)
     fitness_function(individual)
     print("Best test:" + str(individual))
 
