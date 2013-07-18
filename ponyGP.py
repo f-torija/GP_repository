@@ -338,7 +338,7 @@ def print_stats(generation, population):
         _ave = ave(values)
         _std = std(values, _ave)
         return _ave, _std
-            
+    ##Isn't population still sorted from search loop?        
     population.sort()
     fitness_vals = [i.fitness for i in population]
     size_vals = [i.genome.node_cnt for i in population]
@@ -373,7 +373,7 @@ def generational_replacement(new_pop, population):
     new_pop += copy.deepcopy(population)
     new_pop.sort()
     return new_pop[:POPULATION_SIZE]
-
+##Can fitness function be altered to handle all population?/ I'm getting lost in varibles
 def evaluate_fitness(population, fitness_function):
     """Perform the mapping for each individual """
     for ind in population:
@@ -401,7 +401,7 @@ def subtree_mutation(individual):
 
 def subtree_crossover(parent1, parent2):
     """Subtree crossover. Two parents generate two offspring"""
-    
+    ##Should crossover occur at different symbols with same arity?
     #TODO have X tries for finding valid crossover points
     offsprings = (Individual(copy.deepcopy(parent1.genome)),
                 Individual(copy.deepcopy(parent2.genome)))
@@ -479,5 +479,6 @@ if __name__ == '__main__':
         [1, 0]
         ]
     targets = [0, 2]
+    ##Why do we need fitness_function variable?
     fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
     main()
