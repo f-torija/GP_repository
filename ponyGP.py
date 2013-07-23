@@ -31,7 +31,19 @@ import copy
 """
 PonyGP
 
-Implementation of GP to describe how the algorithm works. 
+Implementation of GP to describe how the algorithm works.
+
+Creates a population by initializing two types of trees;
+A "full" tree in which the tree is automatically expanded to its maximum depth
+and a "grow" tree that randomly chooses symbols until it reaches a terminal or
+maximum depth. After a tree is created, its fitness is evaluated and the best
+performing tree or "solution" is kept and a new population is created.  After
+this, the trees can undergo 2 types of changes.  The first is "subtree mutation"
+ in which part or all of the tree is mutated or "regrown". The second is
+"subtree crossover" in which all or part of two trees in the population swap
+nodes with the same symbol. As long as this swap doesn't exceed the maximum
+tree depth.  This process is then repeated 'x' number of times. The best
+solution is then returned at the end of the search.
 
 As of today:
 
@@ -143,7 +155,8 @@ class TreeNode(object):
 
 class Symbols(object):
     """Symbols are functions (internal nodes) or terminals (leaves)"""
-
+    #TODO: Create more symbols for search
+    #TODO: Create more constants for search than .1, 1, and 5
     ## arities: a dictionary mapping symbol name to arity (integer >= 0)
     def __init__(self, arities, variable_prefix):
         self.arities = arities
@@ -165,7 +178,8 @@ class Symbols(object):
             if terminal.startswith(variable_prefix):
                 self.variable_map[terminal] = cnt
                 cnt += 1
-    
+    ##Depth is current depth of tree, max depth is constant
+    ##How is "full" tree created?
     def get_rnd_symbol(self, depth, max_depth, full=False):
         """Get a random symbol. The depth detrimines if a terminal
         must be chosen. If full is specifed a function will be chosen
@@ -177,6 +191,7 @@ class Symbols(object):
             if not full and get_random_boolean():
                 # Faster to index and use random.random
                 symbol = random.choice(self.terminals)
+            ## Clarify full vs grow tree process
             else:
                 symbol = random.choice(self.functions)
 
@@ -189,7 +204,7 @@ class Individual(object):
     def __init__(self, genome):
         self.genome = genome
         self.fitness = DEFAULT_FITNESS
-
+    ## Explain lt purpose in sort
     def __lt__(self, other):
         return self.fitness < other.fitness
 
@@ -203,40 +218,40 @@ class Symbolic_Regression(object):
     """Evaluate fitnesses"""
 
     def __init__(self, fitness_cases, targets, variable_map):
-        #Matrix with each row a case and each column a variable
+        # Matrix with each row a case and each column a variable
         self.fitness_cases = fitness_cases
-        #Each row is the response to the corresponding fitness cases
+        # Each row is the response to the corresponding fitness cases
         self.targets = targets
-        ## TODO description
+        ## self.variables never referenced
         self.variables = None
-        ## TODO description
+        ## Maps terminals to their values
         self.variable_map = variable_map
         assert len(self.fitness_cases) == len(self.targets)
-    
+
+    ## Individual is a solution in the form of a tree
     def __call__(self, individual):
         """Evaluates and sets the fitness in an individual. Fitness is
-        mean square error(MSE)."""
+         root mean square error(MSE)."""
         
         fitness = 0.0
-        for case, target in zip(self.fitness_cases, self.targets):
-            predicted = self.evaluate(individual.genome.root, case)
-            ## FIXME: don't you mean to square here instead of sqrt?
-            fitness += math.sqrt(abs(predicted - target))
+        for fitness_case, target in zip(self.fitness_cases, self.targets):
+            predicted = self.evaluate(individual.genome.root, fitness_case)
+            fitness += (predicted - target)**2
+        ##Check root mean squared error
+        individual.fitness = math.sqrt(fitness)/float(len(self.targets))
 
-        individual.fitness = fitness/float(len(self.targets))
-
-    ## case: the explanatory variables for one data point
-    def evaluate(self, node, case):        
+    ## fitness_case: the explanatory variables for one data point
+    def evaluate(self, node, fitness_case):        
         """Evaluate a node recursively"""
         
-        #Identify the node symbol
+        ## Identify the node symbol
         ## handle basic mathematical functions
         if node.symbol == "+":
-            return self.evaluate(node.children[0], case) + self.evaluate(node.children[1],case)
+            return self.evaluate(node.children[0], fitness_case) + self.evaluate(node.children[1],fitness_case)
         elif node.symbol == "-":
-            return self.evaluate(node.children[0], case) - self.evaluate(node.children[1], case)
+            return self.evaluate(node.children[0], fitness_case) - self.evaluate(node.children[1], fitness_case)
         elif node.symbol == "*":
-            return self.evaluate(node.children[0], case) * self.evaluate(node.children[1], case)
+            return self.evaluate(node.children[0], fitness_case) * self.evaluate(node.children[1], fitness_case)
         elif node.symbol == "/":
             numerator = self.evaluate(node.children[0])
             denominator = self.evaluate(node.children[1])
@@ -244,16 +259,17 @@ class Symbolic_Regression(object):
                 return numerator
             else:
                 return numerator / denominator
-        ## handle the terminals
+        
+        ## handle the terminal variables
         elif node.symbol.startswith(symbols.variable_prefix):
-            return case[self.variable_map[node.symbol]]
-        # the symbol is a constant
+            return fitness_case[self.variable_map[node.symbol]]
+        # the symbol is a terminal constant
         else:
             return float(node.symbol)
 
 
 ### Below are functions which are used for evolution
-
+##Add explination  of get_random_boolean
 def get_random_boolean():
     return bool(random.getrandbits(1))
 
@@ -282,7 +298,7 @@ def initialize_population():
 
 def search_loop():
     """The evolutionary search loop."""
-
+    ## TODO:Create initialization function seperately
     #Create an initial population
     population = initialize_population()
     #Evaluate fitness of initial population
@@ -338,8 +354,6 @@ def print_stats(generation, population):
         _ave = ave(values)
         _std = std(values, _ave)
         return _ave, _std
-    ##Isn't population still sorted from search loop?        
-    population.sort()
     fitness_vals = [i.fitness for i in population]
     size_vals = [i.genome.node_cnt for i in population]
     depth_vals = [i.genome.calculate_depth() for i in population]
@@ -373,7 +387,8 @@ def generational_replacement(new_pop, population):
     new_pop += copy.deepcopy(population)
     new_pop.sort()
     return new_pop[:POPULATION_SIZE]
-##Can fitness function be altered to handle all population?/ I'm getting lost in varibles
+## Can "fitness_function" be altered to handle all population?/ I'm getting lost in varibles
+##TODO: Move inside search loop
 def evaluate_fitness(population, fitness_function):
     """Perform the mapping for each individual """
     for ind in population:
@@ -401,7 +416,7 @@ def subtree_mutation(individual):
 
 def subtree_crossover(parent1, parent2):
     """Subtree crossover. Two parents generate two offspring"""
-    ##Should crossover occur at different symbols with same arity?
+    ##TODO Change to crossover at any inernal node
     #TODO have X tries for finding valid crossover points
     offsprings = (Individual(copy.deepcopy(parent1.genome)),
                 Individual(copy.deepcopy(parent2.genome)))
