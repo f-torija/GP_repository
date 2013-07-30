@@ -27,7 +27,9 @@
 import random
 import math
 import copy
-
+import sys
+import optparse
+import csv
 """
 PonyGP
 
@@ -155,10 +157,9 @@ class TreeNode(object):
 
 class Symbols(object):
     """Symbols are functions (internal nodes) or terminals (leaves)"""
-    #TODO: Create more symbols for search
-    #TODO: Create more constants for search than .1, 1, and 5
-    ## arities: a dictionary mapping symbol name to arity (integer >= 0)
+    
     def __init__(self, arities, variable_prefix):
+        """Arities: A dictionary mapping symbol name to arity (integer >=0)."""
         self.arities = arities
         self.terminals = []
         for key in self.arities.keys():
@@ -179,21 +180,21 @@ class Symbols(object):
                 self.variable_map[terminal] = cnt
                 cnt += 1
     ##Depth is current depth of tree, max depth is constant
-    ##How is "full" tree created?
-    def get_rnd_symbol(self, depth, max_depth, full=False):
-        """Get a random symbol. The depth detrimines if a terminal
-        must be chosen. If full is specifed a function will be chosen
-        until max_depth."""
+    def get_rnd_symbol(self, depth, max_depth, full_tree=False):
+        """Get a random symbol. The depth is the current depth of the tree
+        detrimines if a terminal must be chosen. If full is specifed a function
+        will be chosen until depth == max_depth(constant)."""
         
         if depth >= max_depth:
             symbol = random.choice(self.terminals)
         else:
-            if not full and get_random_boolean():
+            if not full_tree
+                if get_random_boolean():
                 # Faster to index and use random.random
-                symbol = random.choice(self.terminals)
-            ## Clarify full vs grow tree process
+                    symbol = random.choice(self.terminals)
             else:
                 symbol = random.choice(self.functions)
+                #Randomly choose terminal or function for node in a grow tree 
 
         return symbol
 
@@ -206,6 +207,7 @@ class Individual(object):
         self.fitness = DEFAULT_FITNESS
     ## Explain lt purpose in sort
     def __lt__(self, other):
+        """__lt__ defines the default condition for sort() command."""
         return self.fitness < other.fitness
 
     def __str__(self):
@@ -226,13 +228,14 @@ class Symbolic_Regression(object):
         self.variables = None
         ## Maps terminals to their values
         self.variable_map = variable_map
+        print len(self.fitness_cases), len(self.targets)
         assert len(self.fitness_cases) == len(self.targets)
 
     ## Individual is a solution in the form of a tree
     def __call__(self, individual):
-        """Evaluates and sets the fitness in an individual. Fitness is
-         root mean square error(MSE)."""
-        
+        """Evaluates and sets the fitness in an individual. An individual is a
+        solution in the form of a tree Fitness is root mean square error(MSE).
+        """
         fitness = 0.0
         for fitness_case, target in zip(self.fitness_cases, self.targets):
             predicted = self.evaluate(individual.genome.root, fitness_case)
@@ -242,10 +245,9 @@ class Symbolic_Regression(object):
 
     ## fitness_case: the explanatory variables for one data point
     def evaluate(self, node, fitness_case):        
-        """Evaluate a node recursively"""
+        """Evaluate a node recursively. Fitness_case are all of the
+        explanatory varibles for one data point."""
         
-        ## Identify the node symbol
-        ## handle basic mathematical functions
         if node.symbol == "+":
             return self.evaluate(node.children[0], fitness_case) + self.evaluate(node.children[1],fitness_case)
         elif node.symbol == "-":
@@ -262,15 +264,17 @@ class Symbolic_Regression(object):
         
         ## handle the terminal variables
         elif node.symbol.startswith(symbols.variable_prefix):
-            return fitness_case[self.variable_map[node.symbol]]
+                return fitness_case[self.variable_map[node.symbol]]
+
         # the symbol is a terminal constant
         else:
             return float(node.symbol)
 
 
 ### Below are functions which are used for evolution
-##Add explination  of get_random_boolean
+        
 def get_random_boolean():
+    """Returns a random boolean optimized for speed"""
     return bool(random.getrandbits(1))
 
 def initialize_population():
@@ -293,18 +297,22 @@ def initialize_population():
             tree.grow(tree.root, 1, max_depth, full)
         individuals.append(Individual(tree))
         print('Initial tree %d: %s' %(i, str(tree.root)))
+    population = individuals
+    
+    #Use population to find best of first generation
+    for ind in population:
+        fitness_function(ind)
 
-    return individuals
+    population.sort()
+    best_ever = population[0]
+    return population, best_ever
+    
 
 def search_loop():
     """The evolutionary search loop."""
-    ## TODO:Create initialization function seperately
     #Create an initial population
-    population = initialize_population()
-    #Evaluate fitness of initial population
-    evaluate_fitness(population, fitness_function)
-    population.sort()
-    best_ever = population[0]
+    population, best_ever = initialize_population()
+
     #Generation loop
     generation = 0
     #TODO break out when best fitness equals max fitness
@@ -323,7 +331,8 @@ def search_loop():
         new_individuals = list(map(subtree_mutation, new_individuals))
 
         #2) Evaluate fitness
-        evaluate_fitness(new_individuals, fitness_function)
+        for ind in new_individuals:
+            fitness_function(ind)
 
         #3) Select best individuals to keep in population
         population = generational_replacement(new_individuals, population)
@@ -342,7 +351,6 @@ def search_loop():
 
 def print_stats(generation, population):
     """Print the statistics for the generation and individuals"""
-    #len(values) == 0 possible?
     def ave(values):
         """Return the average of the values """
         return float(sum(values))/len(values)
@@ -387,12 +395,6 @@ def generational_replacement(new_pop, population):
     new_pop += copy.deepcopy(population)
     new_pop.sort()
     return new_pop[:POPULATION_SIZE]
-## Can "fitness_function" be altered to handle all population?/ I'm getting lost in varibles
-##TODO: Move inside search loop
-def evaluate_fitness(population, fitness_function):
-    """Perform the mapping for each individual """
-    for ind in population:
-        fitness_function(ind)
 
 def subtree_mutation(individual):
     """Subtree mutation. Pick a node and grow it"""
@@ -465,35 +467,39 @@ def out_of_sample_test(individual):
     fitness_function(individual)
     print("Best test:" + str(individual))
 
+def csv_fitness_and_target_reader(file_name):
+    file_1 = open(file_name, 'r')
+    fitness_case_list = []
+    target_list = []
+    initial_fitness_list = []
+    reader = csv.reader(file_1)
+    for line in reader:
+        if not 'y' in line:
+            x = [line[0], line[1]]
+            initial_fitness_list.append(x)
+            target_list.append(line[2])
+       
+
 if __name__ == '__main__':
     #TODO too many global variables
     ARITIES = {"x0": 0, "x1": 0, "0.1": 0, "1.0": 0, "5.0": 0,
                "*": 2, "+": 2, "-": 2}
     VARIABLE_PREFIX = 'x'
-    POPULATION_SIZE = 10
-    MAX_DEPTH = 3
+    input_vars = [CROSSOVER_PROBABILITY, MUTATION_PROBABILITY, ELITE_SIZE, GENERATIONS, \
+    POPULATION_SIZE =10 ##Default to sys.argv[8] 
+    MAX_DEPTH = 3 ##Default to sys.argv[7] 
     DEFAULT_FITNESS = 10000
-    GENERATIONS = 10
-    ELITE_SIZE = 1
-    #WARNING SEED is hardcoded. Change the SEED for different search
-    ##Won't default SEED = None work?
+    GENERATIONS =10  ##Default to sys.argv[6]
+    ELITE_SIZE =  1 ##Default to sys.argv[5] 
     SEED = None
-    CROSSOVER_PROBABILITY = 0.9
-    MUTATION_PROBABILITY = 0.5
+    CROSSOVER_PROBABILITY =  .9  ##Default to sys.argv[3]
+    MUTATION_PROBABILITY = .5 ## Default to sys.argv[4] 
     random.seed(SEED)
-    
+
+    csv_fitness_and_target_reader('list_file.csv')
     #TODO command line arguments
     #TODO function showing how to compile the code and then run
     #instead of interpreter
-    #TODO have a function generating the fitness cases
-    #TODO currently this function has very few fitness cases and
-    #serves most for illustrative purposes
     symbols = Symbols(ARITIES, VARIABLE_PREFIX)
-    fitness_cases = [
-        [0, 1],
-        [1, 0]
-        ]
-    targets = [0, 2]
-    ##Why do we need fitness_function variable?
     fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
     main()
