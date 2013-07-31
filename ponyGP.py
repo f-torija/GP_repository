@@ -28,7 +28,7 @@ import random
 import math
 import copy
 import sys
-import optparse
+import argparse
 import csv
 """
 PonyGP
@@ -188,8 +188,7 @@ class Symbols(object):
         if depth >= max_depth:
             symbol = random.choice(self.terminals)
         else:
-            if not full_tree
-                if get_random_boolean():
+            if not full_tree and get_random_boolean():
                 # Faster to index and use random.random
                     symbol = random.choice(self.terminals)
             else:
@@ -470,14 +469,20 @@ def out_of_sample_test(individual):
 def csv_fitness_and_target_reader(file_name):
     file_1 = open(file_name, 'r')
     fitness_case_list = []
+    fitness_cases = []
     target_list = []
     initial_fitness_list = []
     reader = csv.reader(file_1)
     for line in reader:
         if not 'y' in line:
             x = [line[0], line[1]]
-            initial_fitness_list.append(x)
+            fitness_case_list.append(x)
             target_list.append(line[2])
+    targets = map(float, target_list)
+    for elem in fitness_case_list:
+        fitness_cases.append(map(float, elem))
+    
+    return targets, fitness_cases
        
 
 if __name__ == '__main__':
@@ -485,19 +490,64 @@ if __name__ == '__main__':
     ARITIES = {"x0": 0, "x1": 0, "0.1": 0, "1.0": 0, "5.0": 0,
                "*": 2, "+": 2, "-": 2}
     VARIABLE_PREFIX = 'x'
-    input_vars = [CROSSOVER_PROBABILITY, MUTATION_PROBABILITY, ELITE_SIZE, GENERATIONS, \
-    POPULATION_SIZE =10 ##Default to sys.argv[8] 
-    MAX_DEPTH = 3 ##Default to sys.argv[7] 
     DEFAULT_FITNESS = 10000
-    GENERATIONS =10  ##Default to sys.argv[6]
-    ELITE_SIZE =  1 ##Default to sys.argv[5] 
     SEED = None
-    CROSSOVER_PROBABILITY =  .9  ##Default to sys.argv[3]
-    MUTATION_PROBABILITY = .5 ## Default to sys.argv[4] 
     random.seed(SEED)
+    
+    #Add arguments to command line
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-cp", "--crossover_prob" , help="Define the probability\
+                        the tree will choose to perform a crossover of nodes"\
+                        , type=float)
+    parser.add_argument("-mp", "--mutaion_prob", help="Define the probability the \
+                        tree will choose to perform a mutation of a node", \
+                        type=float)
+    parser.add_argument("-e", "--elite_size", help="Defines the number of 'best'\
+                        individuals kept from previous generations", type=\
+                        float)
+    parser.add_argument("-g", "--generations", help="Determines the number of \
+                        generations for which the seach is run", type=float)
+    parser.add_argument("-d", "--max_depth", help="Maximum depth a tree can \
+                        grow to" , type=float)
+    parser.add_argument("-p", "--pop_size", help="Determines the total population\
+                        per generation", type=float)
 
-    csv_fitness_and_target_reader('list_file.csv')
-    #TODO command line arguments
+    args = parser.parse_args()
+    #Make arguments optional with a default
+    if args.crossover_prob:
+        CROSSOVER_PROBABILITY = args.crossover_prob
+    else:
+        CROSSOVER_PROBABILITY =  .9
+        
+    if args.mutation_prob:
+        MUTATION_PROBABILITY = args.crossover_prob
+    else:
+        MUTATION_PROBABILITY = .5
+        
+    if args.elite_size:
+        ELITE_SIZE =  args.elite_size
+    else:
+        ELITE_SIZE =  1
+        
+    if args.generations:
+        GENERATIONS = args.generations
+    else:
+        GENERATIONS = 10
+        
+    if args.max_depth:
+        MAX_DEPTH = args.max_depth
+    else:
+        MAX_DEPTH = 3
+        
+    if args.pop_size:
+        POPULATION_SIZE = args.pop_size
+    else:
+        POPULATION_SIZE = 10
+
+       
+    targets, fitness_cases = csv_fitness_and_target_reader('list_file.csv')
+                 
     #TODO function showing how to compile the code and then run
     #instead of interpreter
     symbols = Symbols(ARITIES, VARIABLE_PREFIX)
