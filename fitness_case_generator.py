@@ -32,11 +32,9 @@ def fitness_case_gen(fxn, range_limits=10, neg_range=True):
     list_file = open('list_file.csv', 'w+b')
     writer = csv.writer(list_file)
     writer.writerow(var_list)
-    print var_list
     range_of_val = ((range_lim_c-negs)/50)**2
     
     for i in range(range_of_val):
-        print fitness_list[i]
         writer.writerow((fitness_list[i][0], fitness_list[i][1] , target_list[i]))
     
     
