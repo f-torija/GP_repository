@@ -40,5 +40,5 @@ def fitness_case_gen(fxn, range_limits=10, neg_range=True):
     
             
 if __name__ == '__main__':
-    fitness_case_gen('x0**2+2*x1', 5, False)
+    fitness_case_gen('x0**2', 5, False)
 
