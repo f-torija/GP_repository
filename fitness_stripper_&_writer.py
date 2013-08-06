@@ -93,7 +93,6 @@ def num_stripper(fxn, lower_range, upper_range):
         writer.writerow(elem)
 
 if __name__ == '__main__':
-    fxn = "3+x2+2*x0*x2"
+    fxn = "3*x0"
     file_name = 'list_file.csv'
     num_stripper(fxn, 1, 10)
-    

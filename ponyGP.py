@@ -184,7 +184,6 @@ class Symbols(object):
         """Get a random symbol. The depth is the current depth of the tree
         detrimines if a terminal must be chosen. If full is specifed a function
         will be chosen until depth == max_depth(constant)."""
-        
         if depth >= max_depth:
             symbol = random.choice(self.terminals)
         else:
@@ -227,7 +226,6 @@ class Symbolic_Regression(object):
         self.variables = None
         ## Maps terminals to their values
         self.variable_map = variable_map
-        print len(self.fitness_cases), len(self.targets)
         assert len(self.fitness_cases) == len(self.targets)
 
     ## Individual is a solution in the form of a tree
@@ -471,49 +469,52 @@ def csv_fitness_and_target_reader(file_name):
     fitness_case_list = []
     fitness_cases = []
     target_list = []
+    csv_list = []
     initial_fitness_list = []
     reader = csv.reader(file_1)
     for line in reader:
-        if not 'y' in line:
-            x = [line[0], line[1]]
-            fitness_case_list.append(x)
-            target_list.append(line[2])
+        if not 'y' in line:             
+            for part in line:
+                csv_list.append(part)
+            target = csv_list.pop(-1)
+            target_list.append(target)
+    fitness_case_list.append(csv_list)
+            
     targets = map(float, target_list)
     for elem in fitness_case_list:
         fitness_cases.append(map(float, elem))
-    
     return targets, fitness_cases
        
 
 if __name__ == '__main__':
-    #TODO too many global variables
     ARITIES = {"x0": 0, "x1": 0, "0.1": 0, "1.0": 0, "5.0": 0,
                "*": 2, "+": 2, "-": 2}
     VARIABLE_PREFIX = 'x'
     DEFAULT_FITNESS = 10000
-    SEED = None
-    random.seed(SEED)
     
-    #Add arguments to command line
+    #Adds optional arguments to command line
     parser = argparse.ArgumentParser()
     
     parser.add_argument("-cp", "--crossover_prob" , help="Define the probability\
                         the tree will choose to perform a crossover of nodes"\
                         , type=float)
-    parser.add_argument("-mp", "--mutaion_prob", help="Define the probability the \
+    parser.add_argument("-mp", "--mutation_prob", help="Define the probability the \
                         tree will choose to perform a mutation of a node", \
                         type=float)
     parser.add_argument("-e", "--elite_size", help="Defines the number of 'best'\
                         individuals kept from previous generations", type=\
                         float)
     parser.add_argument("-g", "--generations", help="Determines the number of \
-                        generations for which the seach is run", type=float)
+                        generations for which the search is run", type=float)
     parser.add_argument("-d", "--max_depth", help="Maximum depth a tree can \
                         grow to" , type=float)
     parser.add_argument("-p", "--pop_size", help="Determines the total population\
                         per generation", type=float)
+    parser.add_argument("-s", "--seed", help="Determines the seed for random.seed",\
+                        type=float)
 
     args = parser.parse_args()
+    
     #Make arguments optional with a default
     if args.crossover_prob:
         CROSSOVER_PROBABILITY = args.crossover_prob
@@ -544,10 +545,24 @@ if __name__ == '__main__':
         POPULATION_SIZE = args.pop_size
     else:
         POPULATION_SIZE = 10
+    if args.seed:
+         SEED = args.seed
+    else:
+         SEED = None
+        
+    random.seed(SEED)
 
-       
+    check = []
+    
     targets, fitness_cases = csv_fitness_and_target_reader('list_file.csv')
-                 
+    for sym in ARITIES.keys():
+        if 'x' in sym:
+            check.append(sym)
+            
+    if len(check)!=len(fitness_cases[0]):
+        print "Variable number mismatch: Change arity dictionary or fitness_cases to match"
+        raise SystemExit
+    
     #TODO function showing how to compile the code and then run
     #instead of interpreter
     symbols = Symbols(ARITIES, VARIABLE_PREFIX)
