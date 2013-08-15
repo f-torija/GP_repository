@@ -455,11 +455,7 @@ def main():
 def out_of_sample_test(individual):
     """Out-of-sample test on an individual solution"""
     
-    fitness_cases = [
-        [0, 1],
-        [1, 1]
-        ]
-    targets = [1, 1]
+    targets, fitness_cases = csv_fitness_and_target_reader('list_file_test.csv')
     fitness_function = Symbolic_Regression(fitness_cases, targets, symbols.variable_map)
     fitness_function(individual)
     print("Best test:" + str(individual))
@@ -469,16 +465,16 @@ def csv_fitness_and_target_reader(file_name):
     fitness_case_list = []
     fitness_cases = []
     target_list = []
-    csv_list = []
     initial_fitness_list = []
     reader = csv.reader(file_1)
     for line in reader:
+        csv_list = []
         if not 'y' in line:             
             for part in line:
                 csv_list.append(part)
             target = csv_list.pop(-1)
             target_list.append(target)
-    fitness_case_list.append(csv_list)
+            fitness_case_list.append(csv_list)
             
     targets = map(float, target_list)
     for elem in fitness_case_list:
@@ -554,7 +550,9 @@ if __name__ == '__main__':
 
     check = []
     
-    targets, fitness_cases = csv_fitness_and_target_reader('list_file.csv')
+    targets, fitness_cases = csv_fitness_and_target_reader('list_file_train.csv')
+    
+    #Checks for variable number mismatch and stops program if this is the case
     for sym in ARITIES.keys():
         if 'x' in sym:
             check.append(sym)
