@@ -2,97 +2,129 @@ import re
 import itertools
 import csv
 
-def num_stripper(fxn, lower_range, upper_range):
-    
-    #List initializing all lists
-    var_list = []
-    var_list_s = []
-    char_list = []
-    var_dict = {}
-    num_list = []
-    num_list_t = []
-    big_dict = {}
-    y_list = []
-    iter_list = []
 
-    #Scaled range for .5 incements and create negative range
-    upper_lim_sc = int((upper_range+.5)*100)
-    lower_lim_sc = int((lower_range)*100)
-
-    #Creates range of numbers
-    for x in range(lower_lim_sc, upper_lim_sc, 50):
-        x = float(x)/100
-        num_list.append(x)
+def get_range(train_range, test_range):
+    """Creates lower and upper range for test and train data"""
+    tests = []
+    trains = []
+            
+    if len(test_range) == 3:
+        test_increment  = test_range[2]
+    else:
+        test_increment = .5
         
+    if len(train_range) == 3:
+        train_increment = train_range[2]
+    else:
+        train_increment = .5
+   
+    test_scale = 1/test_increment                   
+    upper_lim_ts = int((test_range[1]+test_increment)*test_scale)
+    lower_lim_ts = int(test_range[0]*test_scale)
 
+    train_scale = 1/train_increment
+    upper_lim_tr = int((train_range[1]+train_increment)*train_scale)
+    lower_lim_tr = int(train_range[0]*train_scale)
+    
+    
+    #Creates range of numbers
+    for y in range(lower_lim_ts, upper_lim_ts):
+        y = float(y)/test_scale
+        tests.append(y)
+
+    for x in range(lower_lim_tr, upper_lim_tr):
+        x = float(x)/train_scale
+        trains.append(x)
+        
+    return trains,tests
+        
+def split_function(fxn):
+    split_list = []
+    char_list = []
+    operators = ['+', '-', '/', '*', '**']
+    
     #Function string split into list elements
     split_list = list(fxn)
 
     #Replace all operators with '!' in new list
-    for num in range(len(split_list)):
-        if '+' not in split_list[num] and '-' not in split_list[num] and '*' not in split_list[num] and '/' not in split_list[num]:
-            char_list.append(split_list[num])
-        else:
+    for char in split_list:
+        if  char in operators :
             char_list.append('!')
             
-    #Join all variables and remove all '!' from lists      
-    almost_str = ''.join(char_list)
-    vars_sub = almost_str.split('!')
-    
+        else:
+            char_list.append(char)
+
+    char_str = ''.join(char_list)
+    split_chars = char_str.split('!')
+    var_list = []
     #Split fxn into 'x's and numbers
-    for elem in vars_sub:
+    for elem in split_chars:
         if 'x' in elem:
-            var_list.append(elem)
+            var_list.append(str(elem))
         else:
             pass
-            
-##    print "Var_list:", var_list, "Else_list:", else_list   #Debug print
-    
+              
     #Removes any repeats in the var_list
-    for elem in var_list:
-        if elem not in var_list_s:
-            var_list_s.append(elem)
+    var_set = set(var_list)
+    var_list= list(var_set)
+    return var_list
 
-    #Creates one tuple for each individual comibination of variables in the
-    #range all in one list called 'iters'
-    iters = list(itertools.product(num_list,repeat=len(var_list_s)))
-    for i in iters:
-        iter_list.append(list(i))
+def fitness_targets_gen(var_set, ranges):
+    """Creates one tuple for each individual comibination of variables in the
+    range all in one list called 'iters' and generates the targets based on the
+    function and each fitness case."""
+    var_set = list(var_set)
+    big_dict = {}
+    
+    iters = list(itertools.product(ranges,repeat=len(var_set)))
+    
+    #Make all elements lists instead of tuples to allow appending
+    iters = map(list,iters)
     iters.sort()
-
-##    print "Var_list_s:", var_list_s, #Debug print
-       
-    #Evaluates all of the cases for the given function
-    for tup in iters:
+    var_set.sort()
+    
+    for fit_case in iters:
         count = 0
         fxn_edt = fxn
-        var_list_s.sort()
-        for var in var_list_s:
-            big_dict[var]= tup[count]
+        for var in var_set:
+            big_dict[var]= fit_case[count]
             count+=1
             fxn_edt = fxn_edt.replace(var, str(big_dict[var]))
-        y_list.append(eval(fxn_edt))
-    
-##    print y_list, iter_list   #Debug print
+        fit_case.append(eval(fxn_edt))
+          
+    return iters
 
-##Preparaion and writing to csv file
-    count = 0
-    for n in iter_list:
-        n.append(y_list[count])
-        count+=1
-
-##    print iter_list ##Debug print; make sure y_value is added to iter_list
-
-    var_list_s.append('y')
-    
-    #Creates writer object
-    list_file = open(file_name, 'w+b')
+def write_to_file (fitness_case, var_set, path):
+    """Preparaion and writing to csv file, creation of writer object and write
+    to file"""
+    header = var_set
+    header.append('y')
+    list_file = open(path, 'w+b')
     writer = csv.writer(list_file)
-    writer.writerow(var_list_s)
-    for elem in iter_list:
-        writer.writerow(elem)
+    writer.writerow(header)
+    for fit in fitness_case:
+        writer.writerow(fit)
+    
+def stripper_gen_writer(fxn, train_range, test_range):
+    """Generates and writes fitness cases and targets to a csv file to be read
+    by the ponyGP.py"""
+    
+    trains, tests = get_range(train_range, test_range)
+    
+    var_list = split_function(fxn)
+    
+    fitness_train = fitness_targets_gen(var_list, trains)
+    fitness_test = fitness_targets_gen(var_list,tests)
+    
+    fitness_cases = fitness_train, fitness_test
+    
+    files = file_name_train, file_name_test    
+    for fit,path in zip(fitness_cases,files):
+        write_to_file(fit, var_list, path)
 
 if __name__ == '__main__':
-    fxn = "3*x0"
-    file_name = 'list_file.csv'
-    num_stripper(fxn, 1, 10)
+    fxn = "12*x0-3*x1"
+    file_name_train = 'list_file_train.csv'
+    file_name_test = 'list_file_test.csv'
+    files = file_name_train,file_name_test 
+    stripper_gen_writer(fxn, [-2,2,.5], [3,5,.5])
